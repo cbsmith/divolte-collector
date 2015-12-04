@@ -34,14 +34,14 @@ import io.divolte.server.config.ValidatedConfiguration;
 import io.divolte.server.hdfs.HdfsFlushingPool;
 import io.divolte.server.ip2geo.ExternalDatabaseLookupService;
 import io.divolte.server.ip2geo.LookupService;
-import io.divolte.server.kafka.KafkaFlushingPool;
+import io.divolte.server.kafka.KafkaProcessor;
 import io.divolte.server.processing.ProcessingPool;
 
 @ParametersAreNonnullByDefault
 final class IncomingRequestProcessingPool extends ProcessingPool<IncomingRequestProcessor, DivolteEvent> {
     private final static Logger logger = LoggerFactory.getLogger(IncomingRequestProcessingPool.class);
 
-    private final Optional<KafkaFlushingPool> kafkaPool;
+    private final Optional<KafkaProcessor> kafkaProcessor;
     private final Optional<HdfsFlushingPool> hdfsPool;
 
     public IncomingRequestProcessingPool(final ValidatedConfiguration vc, final IncomingRequestListener listener) {
@@ -51,7 +51,7 @@ final class IncomingRequestProcessingPool extends ProcessingPool<IncomingRequest
                 vc.configuration().incomingRequestProcessor.maxEnqueueDelay.toMillis(),
                 vc,
                 schemaFromConfig(vc),
-                vc.configuration().kafkaFlusher.enabled ? new KafkaFlushingPool(vc) : null,
+                vc.configuration().kafkaFlusher.enabled ? new KafkaProcessor(vc) : null,
                 vc.configuration().hdfsFlusher.enabled ? new HdfsFlushingPool(vc, schemaFromConfig(vc)) : null,
                 lookupServiceFromConfig(vc),
                 listener
@@ -64,7 +64,7 @@ final class IncomingRequestProcessingPool extends ProcessingPool<IncomingRequest
             final long maxEnqueueDelay,
             final ValidatedConfiguration vc,
             final Schema schema,
-            @Nullable final KafkaFlushingPool kafkaFlushingPool,
+            @Nullable final KafkaProcessor kafkaProcessor,
             @Nullable final HdfsFlushingPool hdfsFlushingPool,
             @Nullable final LookupService geoipLookupService,
             final IncomingRequestListener listener) {
@@ -73,9 +73,9 @@ final class IncomingRequestProcessingPool extends ProcessingPool<IncomingRequest
                 maxQueueSize,
                 maxEnqueueDelay,
                 "Incoming Request Processor",
-                () -> new IncomingRequestProcessor(vc, kafkaFlushingPool, hdfsFlushingPool, geoipLookupService, schema, listener));
+                () -> new IncomingRequestProcessor(vc, kafkaProcessor, hdfsFlushingPool, geoipLookupService, schema, listener));
 
-        this.kafkaPool = Optional.ofNullable(kafkaFlushingPool);
+        this.kafkaProcessor = Optional.ofNullable(kafkaProcessor);
         this.hdfsPool = Optional.ofNullable(hdfsFlushingPool);
     }
 
@@ -119,7 +119,7 @@ final class IncomingRequestProcessingPool extends ProcessingPool<IncomingRequest
     public void stop() {
         super.stop();
 
-        kafkaPool.ifPresent(KafkaFlushingPool::stop);
+        kafkaProcessor.ifPresent((KafkaProcessor processor) -> processor.close());
         hdfsPool.ifPresent(HdfsFlushingPool::stop);
     }
 }

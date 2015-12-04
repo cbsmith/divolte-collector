@@ -34,8 +34,7 @@ import io.divolte.server.config.ValidatedConfiguration;
 import io.divolte.server.hdfs.HdfsFlusher;
 import io.divolte.server.hdfs.HdfsFlushingPool;
 import io.divolte.server.ip2geo.LookupService;
-import io.divolte.server.kafka.KafkaFlusher;
-import io.divolte.server.kafka.KafkaFlushingPool;
+import io.divolte.server.kafka.KafkaProcessor;
 import io.divolte.server.processing.ItemProcessor;
 import io.divolte.server.processing.ProcessingPool;
 import io.divolte.server.recordmapping.DslRecordMapper;
@@ -51,7 +50,7 @@ public final class IncomingRequestProcessor implements ItemProcessor<DivolteEven
     public static final AttachmentKey<Boolean> DUPLICATE_EVENT_KEY = AttachmentKey.create(Boolean.class);
 
     @Nullable
-    private final ProcessingPool<KafkaFlusher, AvroRecordBuffer> kafkaFlushingPool;
+    private final KafkaProcessor kafkaProcessor;
     @Nullable
     private final ProcessingPool<HdfsFlusher, AvroRecordBuffer> hdfsFlushingPool;
 
@@ -65,13 +64,13 @@ public final class IncomingRequestProcessor implements ItemProcessor<DivolteEven
     private final boolean keepDuplicates;
 
     public IncomingRequestProcessor(final ValidatedConfiguration vc,
-                                    @Nullable final KafkaFlushingPool kafkaFlushingPool,
+                                    @Nullable final KafkaProcessor kafkaProcessor,
                                     @Nullable final HdfsFlushingPool hdfsFlushingPool,
                                     @Nullable final LookupService geoipLookupService,
                                     final Schema schema,
                                     final IncomingRequestListener listener) {
 
-        this.kafkaFlushingPool = kafkaFlushingPool;
+        this.kafkaProcessor = kafkaProcessor;
         this.hdfsFlushingPool = hdfsFlushingPool;
         this.listener = Objects.requireNonNull(listener);
 
@@ -166,8 +165,8 @@ public final class IncomingRequestProcessor implements ItemProcessor<DivolteEven
 
     private void doProcess(final AvroRecordBuffer avroBuffer) {
 
-        if (null != kafkaFlushingPool) {
-            kafkaFlushingPool.enqueue(avroBuffer.getPartyId().value, avroBuffer);
+        if (null != kafkaProcessor) {
+            kafkaProcessor.process(avroBuffer);
         }
         if (null != hdfsFlushingPool) {
             hdfsFlushingPool.enqueue(avroBuffer.getPartyId().value, avroBuffer);
